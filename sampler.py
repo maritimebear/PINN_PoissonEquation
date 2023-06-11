@@ -19,7 +19,7 @@ class CustomSampler(Protocol):
 
 class UniformRandomSampler():
     """
-    Callable class, returns tensors with uniform-random entries, in the shape (batch_size, n_dims).
+    Callable class, returns tensors with uniform-random entries, in the shape (n_points, n_dims).
     Each column corresponds to a space or time dimension (x, y, z, t) in the governing equations.
 
     n_dims inferred from number of 'extents' arguments passed to constructor.
@@ -28,7 +28,7 @@ class UniformRandomSampler():
     i.e. the corresponding column of the returned tensor.
     """
     def __init__(self,
-                 batch_size: int,
+                 n_points: int,
                  extents: Sequence[Sequence[float]],
                  *,
                  requires_grad=True):
@@ -36,11 +36,11 @@ class UniformRandomSampler():
         'extents' must be a sequence of sequences,
             eg. [(0.0, 1.0), (0.0, 0.0)] for e1: [0,1], e2: [0,0]
         """
-        self.batch_size = batch_size
+        self.n_points = n_points
         self.extents = extents
         self.requires_grad = requires_grad
         # Lambdas used to generate tensors
-        self.generate = lambda _range: (torch.Tensor(batch_size, 1).uniform_(*_range).requires_grad_(requires_grad))
+        self.generate = lambda _range: (torch.Tensor(n_points, 1).uniform_(*_range).requires_grad_(requires_grad))
 
     def __call__(self) -> Tensor:
         return torch.hstack([self.generate(coord) for coord in self.extents])

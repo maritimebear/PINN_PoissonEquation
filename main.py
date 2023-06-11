@@ -14,6 +14,8 @@ import network
 import dataset
 import trainers
 import loss
+import sampler
+import physics
 
 import torch
 import matplotlib.pyplot as plt
@@ -21,11 +23,13 @@ import numpy as np
 
 torch.manual_seed(767)
 plt.ioff()
-
+PI = np.pi
 
 # Parameters
 batch_size = 64
 n_data_samples = 1024
+n_residual_points = 10_000
+n_boundary_points = 100
 
 extents_x = (0.0, 1.0)
 extents_y = (0.0, 1.0)
@@ -33,7 +37,7 @@ extents_y = (0.0, 1.0)
 # Loss weights
 w_dataloss = 1.0
 w_residualloss = 1.0
-w_boundaryloss = 1.0
+w_boundaryloss = 10.0
 
 # Grid for plotting residuals and fields
 Nx, Ny = (100, 100) # Nx and Ny must multiply to produce batch_size
@@ -49,7 +53,7 @@ batched_domain = torch.hstack([grid_x.flatten()[:,None], grid_y.flatten()[:,None
 # Set up model
 model = network.FCN(2,  # inputs: x, y
                     1,  # outputs: u
-                    256,  # number of neurons per hidden layer
+                    64,  # number of neurons per hidden layer
                     4)  # number of hidden layers
 
 optimiser = torch.optim.Adam(model.parameters(), lr=1e-3)
@@ -62,13 +66,34 @@ lossfn_residual = loss.WeightedScalarLoss(torch.nn.MSELoss(), weight=w_residuall
 lossfn_boundary = loss.WeightedScalarLoss(torch.nn.MSELoss(), weight=w_boundaryloss)
 
 
-# Set up data trainer
+# Set up trainers
+
+# Data trainer
 # ds = dataset.PINN_Dataset("./data.csv", ["x", "y"], ["u"])
 sampling_idxs = np.random.randint(0, 1024**2, n_data_samples)
 ds = dataset.Interior_Partial_Dataset("./data.csv", ["x", "y"], ["u"], sampling_idxs=sampling_idxs)
 dataloader = torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=True)
-data_trainer = trainers.DataTrainer(model, loss_fn=lossfn_data)
+trainer_data = trainers.DataTrainer(model, loss_fn=lossfn_data)
 
+# Residual trainer
+sampler_residual = sampler.UniformRandomSampler(n_points=n_residual_points, extents=[extents_x, extents_y])
+# Source term of Poisson equation
+poisson_source = lambda x: ((2 * PI**2) * torch.cos(PI * x[:, 0]) * torch.cos(PI * x[:, 1])).reshape(x.shape[0], -1)
+residual_fn = physics.PoissonEquation(poisson_source)
+trainer_residual = trainers.ResidualTrainer(sampler_residual, model, residual_fn, lossfn_residual)
+
+# Boundary trainers
+bottom, top = [ [extents_x, (y, y)] for y in extents_y[:] ]
+left, right = [ [(x, x), extents_y] for x in extents_x[:] ]
+samplers_boundaries = [sampler.UniformRandomSampler(n_points=n_boundary_points,
+                                                    extents=ext) for
+                       ext in (bottom, right, top, left)]
+
+# Dirichlet BC
+boundary_fn = lambda x: (torch.cos(PI * x[:, 0]) * torch.cos(PI * x[:, 1])).reshape(x.shape[0], -1)
+
+trainers_boundaries = [trainers.BoundaryTrainer(sampler, model, boundary_fn, lossfn_boundary) for
+                       sampler in samplers_boundaries]
 
 
 # Training loop
@@ -85,12 +110,14 @@ for i in range(n_epochs):
 
         # Data loss
         x, y = [tensor.float() for tensor in batch]  # Network weights have dtype torch.float32
-        loss_data = data_trainer(x, y)
+        loss_data = trainer_data(x, y)
         # Residual loss
+        loss_residual = trainer_residual()
 
         # Boundary losses
+        losses_boundaries = [trainer() for trainer in trainers_boundaries]
 
-        loss_total = loss_data
+        loss_total = loss_data + loss_residual + sum(losses_boundaries)
 
         loss_total.backward()
         optimiser.step()
