@@ -20,12 +20,12 @@ class DataTrainer():
         return self.loss_fn(prediction, y)
 
 
-class PhysicsTrainer():
+class ResidualTrainer():
     # Callable class, calculates physics loss wrt residuals
     def __init__(self,
                  sampler: Callable[[], Tensor],
                  model: Callable[[Tensor], Tensor],
-                 residual_fn: Callable[[Tensor], Tensor],
+                 residual_fn: Callable[[Tensor, Tensor], Tensor],
                  loss_fn: Callable[[Tensor], Tensor]) -> None:
         self.sampler = sampler
         self.model = model
