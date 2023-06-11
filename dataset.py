@@ -63,8 +63,8 @@ class Interior_Partial_Dataset(PINN_Dataset):
 
     Excludes boundary points from read data if required.
 
-    Can use only partial data from the .csv, skipping over a specified number of
-    lines to reduce the size of the dataset.
+    Can use only partial data from the .csv, reading only specified rows of
+    data to reduce the size of the dataset.
 
     Returns data as (input array, output array), where inputs and outputs are
     wrt the PINN model.
@@ -74,14 +74,17 @@ class Interior_Partial_Dataset(PINN_Dataset):
                  input_cols: Union[list[str], list[int]],
                  output_cols: Union[list[str], list[int]],
                  exclude_bounds: Optional[list[tuple[float, float]]] = None,
-                 sampling_fraction: Optional[float] = None):
+                 sampling_idxs: Optional[list[int]] = None):
         """
         filename: .csv file containing data
+
         input_cols, output_cols: column names or column indices of input and
         output data in the .csv file
-        sampling_interval: number of samples to skip after each line in .csv
+
         exclude_bounds: List of tuples containing domain bounds to exclude from dataset,
         in order to sample only interior points
+
+        sampling_idxs: indices of rows to use from the whole dataset
 
         input_cols, output_cols must be lists to guarantee numpy.ndarray is returned
         """
@@ -90,8 +93,8 @@ class Interior_Partial_Dataset(PINN_Dataset):
         if exclude_bounds is not None:
             data = self._exclude_boundaries(data, exclude_bounds)
         # Reduce dataset if specified
-        if sampling_fraction is not None:
-            data = data.iloc[::sampling_fraction, :]
+        if sampling_idxs is not None:
+            data = data.iloc[sampling_idxs, :]
         # Split data into inputs and outputs
         self._inputs, self._outputs = super()._split_inputs_outputs(data, input_cols, output_cols)
 
