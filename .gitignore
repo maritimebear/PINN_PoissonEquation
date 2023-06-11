@@ -3,3 +3,4 @@ __pycache__
 outline.* 
 .flake8
 Multigrid
+temp
