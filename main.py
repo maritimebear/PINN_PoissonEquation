@@ -16,6 +16,7 @@ import trainers
 import loss
 import sampler
 import physics
+import test_metrics
 
 import torch
 import matplotlib.pyplot as plt
@@ -40,14 +41,14 @@ w_residualloss = 1.0
 w_boundaryloss = 10.0
 
 # Grid for plotting residuals and fields
-Nx, Ny = (100, 100) # Nx and Ny must multiply to produce batch_size
+# Nx, Ny = (100, 100) # Nx and Ny must multiply to produce batch_size
 
 
-grid_x, grid_y = torch.meshgrid(torch.linspace(*extents_x, Nx, requires_grad=False),
-                                torch.linspace(*extents_y, Ny, requires_grad=False),
-                                indexing='xy')
+# grid_x, grid_y = torch.meshgrid(torch.linspace(*extents_x, Nx, requires_grad=False),
+                                # torch.linspace(*extents_y, Ny, requires_grad=False),
+                                # indexing='xy')
 
-batched_domain = torch.hstack([grid_x.flatten()[:,None], grid_y.flatten()[:,None]])
+# batched_domain = torch.hstack([grid_x.flatten()[:,None], grid_y.flatten()[:,None]])
 
 
 # Set up model
@@ -96,9 +97,13 @@ trainers_boundaries = [trainers.BoundaryTrainer(sampler, model, boundary_fn, los
                        sampler in samplers_boundaries]
 
 
+# Test-metrics
+error_calculator = test_metrics.PoissonErrorCalculator(dataset.PINN_Dataset("./data.csv", ["x", "y"], ["u"]))
+
 # Training loop
 n_epochs = 100
 epoch_loss = torch.zeros((n_epochs,))
+epoch_error = list()
 
 for i in range(n_epochs):
     loss_list = list()
@@ -127,14 +132,23 @@ for i in range(n_epochs):
 
     epoch_loss[i] = torch.stack(loss_list).mean().item()
 
-    test_pred = model(batched_domain)
+    # test_pred = model(batched_domain)
 
-
-    fig = plt.figure(figsize=(4, 8))
-    ax_loss = fig.add_subplot(2, 1, 1)
-    ax_surf = fig.add_subplot(2, 1, 2, projection="3d")
+    fig1 = plt.figure(figsize=(4, 4))
+    ax_loss = fig1.add_subplot(1, 1, 1)
+    # ax_surf = fig1.add_subplot(2, 1, 2, projection="3d")
     ax_loss.semilogy(epoch_loss)
-    ax_surf.plot_surface(grid_x, grid_y, test_pred.reshape_as(grid_x).detach())
+    # ax_surf.plot_surface(grid_x, grid_y, test_pred.reshape_as(grid_x).detach())
+
+    # Calculate and plot error in prediction
+    fig2 = plt.figure(figsize=(4, 8))
+    ax_errornorm = fig2.add_subplot(2, 1, 1)
+    ax_errorcontours = fig2.add_subplot(2, 1, 2)
+
+    error = error_calculator(model)
+    epoch_error.append(np.linalg.norm(error))
+    ax_errornorm.semilogy(epoch_error)
+    ax_errorcontours.contourf(error_calculator.x, error_calculator.y,
+                              error.reshape(error_calculator.x.shape))
+
     plt.show()
-
-
