@@ -29,8 +29,8 @@ PI = np.pi
 # Parameters
 batch_size = 64
 n_data_samples = 1024
-n_residual_points = 10_000
-n_boundary_points = 100
+n_residual_points = 1000
+n_boundary_points = 1000
 
 extents_x = (0.0, 1.0)
 extents_y = (0.0, 1.0)
@@ -38,9 +38,10 @@ extents_y = (0.0, 1.0)
 # Loss weights
 w_dataloss = 1.0
 w_residualloss = 1.0
-w_boundaryloss = 10.0
+w_boundaryloss = 2.0
 
-# Grid for plotting residuals and fields
+# Grid for plotting residuals and fields during testing
+test_gridspacing = 100
 # Nx, Ny = (100, 100) # Nx and Ny must multiply to produce batch_size
 
 
@@ -98,7 +99,12 @@ trainers_boundaries = [trainers.BoundaryTrainer(sampler, model, boundary_fn, los
 
 
 # Test-metrics
+pred_plotter = test_metrics.PredictionPlotter(extents_x, test_gridspacing, extents_y, test_gridspacing)
 error_calculator = test_metrics.PoissonErrorCalculator(dataset.PINN_Dataset("./data.csv", ["x", "y"], ["u"]))
+
+# Convenience variables for plotting and monitoring
+# batched_domain = torch.hstack([torch.linspace(*extents_x, test_gridspacing),
+#                                torch.linspace(*extents_y, test_gridspacing)])
 
 # Training loop
 n_epochs = 100
@@ -134,11 +140,12 @@ for i in range(n_epochs):
 
     # test_pred = model(batched_domain)
 
-    fig1 = plt.figure(figsize=(4, 4))
-    ax_loss = fig1.add_subplot(1, 1, 1)
-    # ax_surf = fig1.add_subplot(2, 1, 2, projection="3d")
+    fig1 = plt.figure(figsize=(4, 8))
+    ax_loss = fig1.add_subplot(2, 1, 1)
+    ax_surf = fig1.add_subplot(2, 1, 2, projection="3d")
     ax_loss.semilogy(epoch_loss)
-    # ax_surf.plot_surface(grid_x, grid_y, test_pred.reshape_as(grid_x).detach())
+    # ax_surf.plot_surface(error_calculator.x, error_calculator.y, model(batched_domain).reshape_as(error_calculator.x).detach())
+    ax_surf = pred_plotter(ax_surf, model)
 
     # Calculate and plot error in prediction
     fig2 = plt.figure(figsize=(4, 8))
@@ -148,7 +155,8 @@ for i in range(n_epochs):
     error = error_calculator(model)
     epoch_error.append(np.linalg.norm(error))
     ax_errornorm.semilogy(epoch_error)
-    ax_errorcontours.contourf(error_calculator.x, error_calculator.y,
-                              error.reshape(error_calculator.x.shape))
+    cs = ax_errorcontours.contourf(error_calculator.x, error_calculator.y,
+                                   error.reshape(error_calculator.x.shape))
+    fig2.colorbar(cs)
 
     plt.show()
