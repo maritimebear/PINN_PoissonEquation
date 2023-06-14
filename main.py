@@ -22,6 +22,8 @@ import plotters
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.stats import qmc
+
 
 torch.manual_seed(767)
 plt.ioff()
@@ -35,6 +37,13 @@ n_boundary_points = 1000
 
 extents_x = (0.0, 1.0)
 extents_y = (0.0, 1.0)
+
+# Latin Hypercube sampling for residual - collocation points
+res_lhs_sampler = qmc.LatinHypercube(d=2)
+res_lhs_collpts = torch.from_numpy(sampler.random(n=n_residual_points)).requires_grad_(True) # Set of all collocation points
+# qmc.scale(res_lhs_collpts, *[[ext[0]], [ext[1]] for ext in (extents_x, extents_y)])  # Scale if domain is not the unit square
+idxs_collpts = np.arange(res_lhs_collpts.shape[0])  # Array of indices to shuffle collocation points
+
 
 # Loss weights
 w_dataloss = 0.0
@@ -70,11 +79,11 @@ dataloader = torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=True
 trainer_data = trainers.DataTrainer(model, loss_fn=lossfn_data)
 
 # Residual trainer
-sampler_residual = sampler.UniformRandomSampler(n_points=n_residual_points, extents=[extents_x, extents_y])
+# sampler_residual = sampler.UniformRandomSampler(n_points=n_residual_points, extents=[extents_x, extents_y])
 # Source term of Poisson equation
 poisson_source = lambda x: ((2 * PI**2) * torch.cos(PI * x[:, 0]) * torch.cos(PI * x[:, 1])).reshape(x.shape[0], -1)
 residual_fn = physics.PoissonEquation(poisson_source)
-trainer_residual = trainers.ResidualTrainer(sampler_residual, model, residual_fn, lossfn_residual)
+# trainer_residual = trainers.ResidualTrainer(sampler_residual, model, residual_fn, lossfn_residual)
 
 # Boundary trainers
 bottom, top = [ [extents_x, (y, y)] for y in extents_y[:] ]
@@ -121,7 +130,14 @@ for i in range(n_epochs):
         x, y = [tensor.float() for tensor in batch]  # Network weights have dtype torch.float32
         loss_data = trainer_data(x, y)
         # Residual loss
-        loss_residual = trainer_residual()
+        # loss_residual = trainer_residual()
+        np.shuffle(idxs_collpts)  # Shuffle collocation points
+        res_pred = model(res_lhs_collpts[idxs_collpts])  # Evaluate model at shuffled collocation points
+        residual = residual_fn(res_pred, res_lhs_collpts[idxs_collpts])
+        loss_residual = lossfn_residual(res_pred, torch.zeros_like(res_pred))
+
+
+
 
         # Boundary losses
         loss_boundaries = sum([trainer() for trainer in trainers_boundaries])  # Not considering each boundary separately
