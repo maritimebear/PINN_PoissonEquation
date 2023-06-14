@@ -12,9 +12,13 @@ class PoissonEquation():
 
         -(u_xx + u_yy) = f
     """
-    def __init__(self, source_fn: Callable[[Tensor], Tensor]) -> None:
-        self.source_fn = source_fn
-        self._ones = None
+    # def __init__(self, source_fn: Callable[[Tensor], Tensor]) -> None:
+        # self.source_fn = source_fn
+        # self._ones = None
+        
+    def source_fn(self, x):
+        PI = torch.pi
+        return (2 * PI * PI) * torch.cos(PI * x[:, 0]) * torch.cos(PI * x[:, 1])
 
     def _grad(self, f: Tensor, x: Tensor) -> Tensor:
         # if self._ones is None:

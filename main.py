@@ -32,8 +32,8 @@ PI = np.pi
 # Parameters
 batch_size = 64
 n_data_samples = 1024
-n_residual_points = 10_000
-n_boundary_points = 1000
+n_residual_points = int(2**14)
+n_boundary_points = 10_000
 
 extents_x = (0.0, 1.0)
 extents_y = (0.0, 1.0)
@@ -80,7 +80,8 @@ trainer_data = trainers.DataTrainer(model, loss_fn=lossfn_data)
 # sampler_residual = sampler.UniformRandomSampler(n_points=n_residual_points, extents=[extents_x, extents_y])
 # Source term of Poisson equation
 poisson_source = lambda x: ((2 * PI**2) * torch.cos(PI * x[:, 0]) * torch.cos(PI * x[:, 1])).reshape(x.shape[0], -1)
-residual_fn = physics.PoissonEquation(poisson_source)
+# residual_fn = physics.PoissonEquation(poisson_source)
+residual_fn = physics.PoissonEquation()
 # trainer_residual = trainers.ResidualTrainer(sampler_residual, model, residual_fn, lossfn_residual)
 
 # Boundary trainers
@@ -123,7 +124,7 @@ optimiser_Adam = torch.optim.Adam(model.parameters(), lr=1e-3)
 optimiser_LBFGS = torch.optim.LBFGS(model.parameters())
 # optimiser = torch.optim.SGD(model.parameters(), lr=1e-2)
 
-def closure(optim):
+def closure(optim, step):
     def wrapper():
         for batch in dataloader:
             optim.zero_grad()
@@ -136,13 +137,15 @@ def closure(optim):
             collpts = res_lhs_collpts[idxs_collpts]
             res_pred = model(collpts)  # Evaluate model at shuffled collocation points
             residual = residual_fn(res_pred, collpts)
-            loss_residual = lossfn_residual(res_pred, torch.zeros_like(res_pred))
+            loss_residual = lossfn_residual(residual, torch.zeros_like(residual))
             # Boundary losses
             loss_boundaries = sum([trainer() for trainer in trainers_boundaries])  # Not considering each boundary separately
             # Total loss
             loss_total = loss_data + loss_residual + loss_boundaries
             loss_total.backward()
-            # optim.step()
+            if step:
+                optim.step()
+                
 
             # Append losses to lists
             for _loss, _list in zip([loss_data, loss_residual, loss_boundaries, loss_total],
@@ -189,10 +192,13 @@ def postprocess():
     # TODO: Remove after fixing residual errors not reducing
     # Track residual learning
     # _domain = error_calculator._input
-    _res_test_fn = physics.PoissonEquation(poisson_source)
-    _x, _y = [torch.linspace(*ext, 100, requires_grad=True) for ext in (extents_x, extents_y)]
+    # _res_test_fn = physics.PoissonEquation(poisson_source)
+    _res_test_fn = physics.PoissonEquation()
+    _gridx, _gridy = torch.meshgrid(*[torch.linspace(*ext, 100, requires_grad=True) for ext in (extents_x, extents_y)], indexing='xy')
+    
+    # _x, _y = [torch.linspace(*ext, 100, requires_grad=True) for ext in (extents_x, extents_y)]
 
-    _res_domain = torch.hstack( [t[:, None] for t in (_x, _y)] )
+    _res_domain = torch.hstack( [t.flatten()[:, None] for t in (_gridx, _gridy)] )
     u_h = model(_res_domain)
 
     _residuals = _res_test_fn(u_h, _res_domain)
@@ -200,24 +206,23 @@ def postprocess():
 
     fig_res = plt.figure(figsize=(4, 8))
     ax_resnorm = fig_res.add_subplot(2, 1, 1)
-    ax_rescontours = fig_res.add_subplot(2, 1, 2, projection="3d")
+    ax_rescontours = fig_res.add_subplot(2, 1, 2)
     ax_resnorm = plotters.semilogy_plot(ax_resnorm, _res_list, xlabel="Epochs", ylabel="||res||", title="L2 norm of residuals")
 
-    cs_r = ax_rescontours.contourf(_x.detach().numpy(), _y.detach().numpy(), _residuals.detach().numpy())
+    cs_r = ax_rescontours.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), _residuals.reshape(_gridx.shape).detach().numpy())
     fig_res.colorbar(cs_r)
 
     plt.show()
 
-closure_Adam = closure(optimiser_Adam)
-closure_LBFGS = closure(optimiser_LBFGS)
+closure_Adam = closure(optimiser_Adam, step=True)
+closure_LBFGS = closure(optimiser_LBFGS, step=False)
 
 for i in range(n_epochs_Adam):
     print(f"Adam epoch: {i}")
     closure_Adam()
-    optimiser_Adam.step()
-    # postprocess()
+    postprocess()
 
-postprocess()
+# postprocess()
 
 for i in range(n_epochs_LBFGS):
     print(f"L-BFGS epoch: {i}")
