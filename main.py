@@ -30,7 +30,7 @@ PI = np.pi
 # Parameters
 batch_size = 64
 n_data_samples = 1024
-n_residual_points = 1000
+n_residual_points = 10_000
 n_boundary_points = 1000
 
 extents_x = (0.0, 1.0)
