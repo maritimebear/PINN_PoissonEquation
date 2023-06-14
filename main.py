@@ -46,7 +46,7 @@ idxs_collpts = np.arange(res_lhs_collpts.shape[0])  # Array of indices to shuffl
 
 
 # Loss weights
-w_dataloss = 0.0
+w_dataloss = 1.0 * 0
 w_residualloss = 1.0
 w_boundaryloss = 100.0
 
@@ -56,7 +56,7 @@ test_gridspacing = 100
 # Set up model
 model = network.FCN(2,  # inputs: x, y
                     1,  # outputs: u
-                    64,  # number of neurons per hidden layer
+                    32,  # number of neurons per hidden layer
                     4)  # number of hidden layers
 
 
@@ -105,8 +105,8 @@ pred_plotter = test_metrics.PredictionPlotter(extents_x, test_gridspacing, exten
 error_calculator = test_metrics.PoissonErrorCalculator(dataset.PINN_Dataset("./data.csv", ["x", "y"], ["u"]))
 
 # Training loop
-n_epochs_Adam = 30
-n_epochs_LBFGS = 10
+n_epochs_Adam = 20_000
+n_epochs_LBFGS = 0
 
 
 # Lists to store losses/errors
