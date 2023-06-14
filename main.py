@@ -120,7 +120,7 @@ _res_list = list()
 
 # Optimisers
 optimiser_Adam = torch.optim.Adam(model.parameters(), lr=1e-3)
-optimiser_LBFGS = torch.optim.LBFGS(model.parameters)
+optimiser_LBFGS = torch.optim.LBFGS(model.parameters())
 # optimiser = torch.optim.SGD(model.parameters(), lr=1e-2)
 
 def closure(optim):
@@ -142,14 +142,14 @@ def closure(optim):
             # Total loss
             loss_total = loss_data + loss_residual + loss_boundaries
             loss_total.backward()
-            optimiser.step()
+            # optim.step()
 
             # Append losses to lists
             for _loss, _list in zip([loss_data, loss_residual, loss_boundaries, loss_total],
                                        [loss_data_list, loss_residual_list, loss_boundaries_list, loss_total_list]):
                 _list.append(_loss.detach())
 
-        return total_loss
+        return loss_total
     return wrapper
 
 def postprocess():
@@ -214,7 +214,10 @@ closure_LBFGS = closure(optimiser_LBFGS)
 for i in range(n_epochs_Adam):
     print(f"Adam epoch: {i}")
     closure_Adam()
-    postprocess()
+    optimiser_Adam.step()
+    # postprocess()
+
+postprocess()
 
 for i in range(n_epochs_LBFGS):
     print(f"L-BFGS epoch: {i}")
