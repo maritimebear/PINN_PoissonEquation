@@ -47,17 +47,21 @@ class BoundaryTrainer():
     def __init__(self,
                  sampler: Callable[[], Tensor],
                  model: Callable[[Tensor], Tensor],
-                 boundary_fn: Callable[[Tensor], Tensor],
+                 # boundary_fn: Callable[[Tensor], Tensor],
                  loss_fn: Callable[[Tensor], Tensor]) -> None:
         self.sampler = sampler
         self.model = model
-        self.boundary_fn = boundary_fn
+        # self.boundary_fn = boundary_fn
         self.loss_fn = loss_fn
+        
+    def _boundary_fn(self, x):
+        PI = torch.pi
+        return ( torch.cos(PI * x[:, 0]) * torch.cos(PI * x[:, 1]) )
 
     def __call__(self) -> Tensor:
         domain = self.sampler()
         prediction = self.model(domain)
-        target = self.boundary_fn(domain)
+        target = self._boundary_fn(domain).reshape(prediction.shape)
         return self.loss_fn(prediction, target)  # Return loss
 
 

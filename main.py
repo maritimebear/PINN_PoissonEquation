@@ -48,7 +48,7 @@ idxs_collpts = np.arange(res_lhs_collpts.shape[0])  # Array of indices to shuffl
 # Loss weights
 w_dataloss = 0.0
 w_residualloss = 1.0
-w_boundaryloss = 1.0
+w_boundaryloss = 100.0
 
 # Grid for plotting residuals and fields during testing
 test_gridspacing = 100
@@ -79,7 +79,7 @@ trainer_data = trainers.DataTrainer(model, loss_fn=lossfn_data)
 # Residual trainer
 # sampler_residual = sampler.UniformRandomSampler(n_points=n_residual_points, extents=[extents_x, extents_y])
 # Source term of Poisson equation
-poisson_source = lambda x: ((2 * PI**2) * torch.cos(PI * x[:, 0]) * torch.cos(PI * x[:, 1])).reshape(x.shape[0], -1)
+# poisson_source = lambda x: ((2 * PI**2) * torch.cos(PI * x[:, 0]) * torch.cos(PI * x[:, 1])).reshape(x.shape[0], -1)
 # residual_fn = physics.PoissonEquation(poisson_source)
 residual_fn = physics.PoissonEquation()
 # trainer_residual = trainers.ResidualTrainer(sampler_residual, model, residual_fn, lossfn_residual)
@@ -92,18 +92,20 @@ samplers_boundaries = [sampler.UniformRandomSampler(n_points=n_boundary_points,
                        ext in (bottom, right, top, left)]
 
 # Dirichlet BC
-boundary_fn = lambda x: (torch.cos(PI * x[:, 0]) * torch.cos(PI * x[:, 1])).reshape(x.shape[0], -1)
+# boundary_fn = lambda x: (torch.cos(PI * x[:, 0]) * torch.cos(PI * x[:, 1])).reshape(x.shape[0], -1)
 
-trainers_boundaries = [trainers.BoundaryTrainer(sampler, model, boundary_fn, lossfn_boundary) for
+# trainers_boundaries = [trainers.BoundaryTrainer(sampler, model, boundary_fn, lossfn_boundary) for
+#                        sampler in samplers_boundaries]
+
+trainers_boundaries = [trainers.BoundaryTrainer(sampler, model, lossfn_boundary) for
                        sampler in samplers_boundaries]
-
 
 # Test-metrics
 pred_plotter = test_metrics.PredictionPlotter(extents_x, test_gridspacing, extents_y, test_gridspacing)
 error_calculator = test_metrics.PoissonErrorCalculator(dataset.PINN_Dataset("./data.csv", ["x", "y"], ["u"]))
 
 # Training loop
-n_epochs_Adam = 50
+n_epochs_Adam = 30
 n_epochs_LBFGS = 10
 
 
