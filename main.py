@@ -17,6 +17,7 @@ import loss
 import sampler
 import physics
 import test_metrics
+import plotters
 
 import torch
 import matplotlib.pyplot as plt
@@ -93,14 +94,14 @@ trainers_boundaries = [trainers.BoundaryTrainer(sampler, model, boundary_fn, los
 pred_plotter = test_metrics.PredictionPlotter(extents_x, test_gridspacing, extents_y, test_gridspacing)
 error_calculator = test_metrics.PoissonErrorCalculator(dataset.PINN_Dataset("./data.csv", ["x", "y"], ["u"]))
 
-# Convenience variables for plotting and monitoring
-# batched_domain = torch.hstack([torch.linspace(*extents_x, test_gridspacing),
-#                                torch.linspace(*extents_y, test_gridspacing)])
-
 # Training loop
 n_epochs = 100
-# epoch_loss = torch.zeros((n_epochs,))
+
+# Lists to store losses/errors
 loss_total_list = list()
+loss_data_list = list()
+loss_residual_list = list()
+loss_boundaries_list = list()
 epoch_error_l2 = list()
 epoch_error_inf = list()
 
@@ -119,23 +120,39 @@ for i in range(n_epochs):
         loss_residual = trainer_residual()
 
         # Boundary losses
-        losses_boundaries = [trainer() for trainer in trainers_boundaries]
+        loss_boundaries = sum([trainer() for trainer in trainers_boundaries])  # Not considering each boundary separately
 
-        loss_total = loss_data + loss_residual + sum(losses_boundaries)
+        loss_total = loss_data + loss_residual + loss_boundaries
 
         loss_total.backward()
         optimiser.step()
-        loss_list.append(loss_total.detach())
+        
+        # Append losses to lists
+        for _loss, _list in zip([loss_data, loss_residual, loss_boundaries, loss_total],
+                                   [loss_data_list, loss_residual_list, loss_boundaries_list, loss_total_list]):
+            _list.append(_loss.detach())
+            
         if nbatch == 1000:
             break
 
-    loss_total_list.append(torch.stack(loss_list).mean().item())
+    # loss_total_list.append(torch.stack(loss_list).mean().item())
+    
+    # Post-processing        
+    error = error_calculator(model)
+    epoch_error_l2.append(np.linalg.norm(error.flatten()))
+    epoch_error_inf.append(np.linalg.norm(error.flatten(), ord=np.inf))
+    
+    # Plotting
+    fig_loss, ax_loss = plt.subplots(1, 1, figsize=(4, 4))
+    for _list, label in zip([loss_data_list, loss_residual_list, loss_boundaries_list, loss_total_list],
+                            ["Data", "Residual", "Boundaries", "Total"]):
+        ax_loss = plotters.semilogy_plot(ax_loss, _list, label=label, xlabel="Iterations", ylabel="Loss", title="Losses")
+    
 
-    # test_pred = model(batched_domain)
 
-    fig1 = plt.figure(figsize=(4, 4))
-    ax_loss = fig1.add_subplot(1, 1, 1)
-    ax_loss.semilogy(loss_total_list)
+    # fig1 = plt.figure(figsize=(4, 4))
+    # ax_loss = fig1.add_subplot(1, 1, 1)
+    # ax_loss.semilogy(loss_total_list)
 
 
     # Calculate and plot error in prediction
@@ -145,16 +162,19 @@ for i in range(n_epochs):
     ax_surf = fig2.add_subplot(2, 2, 3, projection="3d")
     ax_error_infnorm = fig2.add_subplot(2, 2, 4)
     
-
-    error = error_calculator(model)
-    epoch_error_l2.append(np.linalg.norm(error.flatten()))
-    epoch_error_inf.append(np.linalg.norm(error.flatten(), ord=np.inf))
-    ax_error_l2norm.semilogy(epoch_error_l2)
+    
+    ax_error_l2norm, ax_error_infnorm = [plotters.semilogy_plot(ax, errorlist, xlabel="Iteration", ylabel="||error||", title=title) for
+                                         ax, errorlist, title in zip([ax_error_l2norm, ax_error_infnorm],
+                                                                     [epoch_error_l2, epoch_error_inf],
+                                                                     ["L2 norm of error", "inf-norm of error"])]
+    
+    
+    # ax_error_l2norm.semilogy(epoch_error_l2)
     cs = ax_errorcontours.contourf(error_calculator.x, error_calculator.y,
                                    error.reshape(error_calculator.x.shape))
     fig2.colorbar(cs)
     ax_surf = pred_plotter(ax_surf, model)
-    ax_error_infnorm.semilogy(epoch_error_inf)
+    # ax_error_infnorm.semilogy(epoch_error_inf)
     
     fig2.tight_layout()
 
