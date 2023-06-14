@@ -37,7 +37,7 @@ extents_x = (0.0, 1.0)
 extents_y = (0.0, 1.0)
 
 # Loss weights
-w_dataloss = 1.0
+w_dataloss = 0.0
 w_residualloss = 1.0
 w_boundaryloss = 1.0
 
@@ -50,7 +50,7 @@ model = network.FCN(2,  # inputs: x, y
                     64,  # number of neurons per hidden layer
                     4)  # number of hidden layers
 
-optimiser = torch.optim.Adam(model.parameters(), lr=1e-4)
+optimiser = torch.optim.Adam(model.parameters(), lr=1e-3)
 # optimiser = torch.optim.SGD(model.parameters(), lr=1e-2)
 
 
@@ -95,7 +95,7 @@ pred_plotter = test_metrics.PredictionPlotter(extents_x, test_gridspacing, exten
 error_calculator = test_metrics.PoissonErrorCalculator(dataset.PINN_Dataset("./data.csv", ["x", "y"], ["u"]))
 
 # Training loop
-n_epochs = 100
+n_epochs = 10000
 
 # Lists to store losses/errors
 loss_total_list = list()
@@ -104,6 +104,10 @@ loss_residual_list = list()
 loss_boundaries_list = list()
 epoch_error_l2 = list()
 epoch_error_inf = list()
+
+
+# TODO: Remove after fixing residuals
+_res_list = list()
 
 for i in range(n_epochs):
     loss_list = list()
@@ -142,18 +146,14 @@ for i in range(n_epochs):
     epoch_error_l2.append(np.linalg.norm(error.flatten()))
     epoch_error_inf.append(np.linalg.norm(error.flatten(), ord=np.inf))
     
+    
+    
     # Plotting
     fig_loss, ax_loss = plt.subplots(1, 1, figsize=(4, 4))
     for _list, label in zip([loss_data_list, loss_residual_list, loss_boundaries_list, loss_total_list],
                             ["Data", "Residual", "Boundaries", "Total"]):
         ax_loss = plotters.semilogy_plot(ax_loss, _list, label=label, xlabel="Iterations", ylabel="Loss", title="Losses")
     
-
-
-    # fig1 = plt.figure(figsize=(4, 4))
-    # ax_loss = fig1.add_subplot(1, 1, 1)
-    # ax_loss.semilogy(loss_total_list)
-
 
     # Calculate and plot error in prediction
     fig2 = plt.figure(figsize=(8, 8))
@@ -177,5 +177,27 @@ for i in range(n_epochs):
     # ax_error_infnorm.semilogy(epoch_error_inf)
     
     fig2.tight_layout()
+
+    
+    # TODO: Remove after fixing residual errors not reducing
+    # Track residual learning
+    # _domain = error_calculator._input
+    _res_test_fn = physics.PoissonEquation(poisson_source)
+    _x, _y = [torch.linspace(*ext, 100, requires_grad=True) for ext in (extents_x, extents_y)]
+    
+    _res_domain = torch.hstack( [t[:, None] for t in (_x, _y)] )
+    u_h = model(_res_domain)
+    
+    _residuals = _res_test_fn(u_h, _res_domain)
+    _res_list.append(np.linalg.norm(_residuals.detach().numpy()))
+    
+    
+    fig_res = plt.figure(figsize=(4, 8))
+    ax_resnorm = fig_res.add_subplot(2, 1, 1)
+    ax_rescontours = fig_res.add_subplot(2, 1, 2, projection="3d")
+    ax_resnorm = plotters.semilogy_plot(ax_resnorm, _res_list, xlabel="Epochs", ylabel="||res||", title="L2 norm of residuals")
+    
+    cs_r = ax_rescontours.contourf(_x.detach().numpy(), _y.detach().numpy(), _residuals.detach().numpy())
+    fig_res.colorbar(cs_r)
 
     plt.show()
