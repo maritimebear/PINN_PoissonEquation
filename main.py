@@ -40,7 +40,7 @@ extents_y = (0.0, 1.0)
 
 # Latin Hypercube sampling for residual - collocation points
 res_lhs_sampler = qmc.LatinHypercube(d=2)
-res_lhs_collpts = torch.from_numpy(sampler.random(n=n_residual_points)).requires_grad_(True) # Set of all collocation points
+res_lhs_collpts = torch.from_numpy(res_lhs_sampler.random(n=n_residual_points)).float().requires_grad_(True) # Set of all collocation points
 # qmc.scale(res_lhs_collpts, *[[ext[0]], [ext[1]] for ext in (extents_x, extents_y)])  # Scale if domain is not the unit square
 idxs_collpts = np.arange(res_lhs_collpts.shape[0])  # Array of indices to shuffle collocation points
 
@@ -131,9 +131,10 @@ for i in range(n_epochs):
         loss_data = trainer_data(x, y)
         # Residual loss
         # loss_residual = trainer_residual()
-        np.shuffle(idxs_collpts)  # Shuffle collocation points
-        res_pred = model(res_lhs_collpts[idxs_collpts])  # Evaluate model at shuffled collocation points
-        residual = residual_fn(res_pred, res_lhs_collpts[idxs_collpts])
+        np.random.shuffle(idxs_collpts)  # Shuffle collocation points
+        collpts = res_lhs_collpts[idxs_collpts]
+        res_pred = model(collpts)  # Evaluate model at shuffled collocation points
+        residual = residual_fn(res_pred, collpts)
         loss_residual = lossfn_residual(res_pred, torch.zeros_like(res_pred))
 
 
