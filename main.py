@@ -38,19 +38,10 @@ extents_y = (0.0, 1.0)
 # Loss weights
 w_dataloss = 1.0
 w_residualloss = 1.0
-w_boundaryloss = 2.0
+w_boundaryloss = 1.0
 
 # Grid for plotting residuals and fields during testing
 test_gridspacing = 100
-# Nx, Ny = (100, 100) # Nx and Ny must multiply to produce batch_size
-
-
-# grid_x, grid_y = torch.meshgrid(torch.linspace(*extents_x, Nx, requires_grad=False),
-                                # torch.linspace(*extents_y, Ny, requires_grad=False),
-                                # indexing='xy')
-
-# batched_domain = torch.hstack([grid_x.flatten()[:,None], grid_y.flatten()[:,None]])
-
 
 # Set up model
 model = network.FCN(2,  # inputs: x, y
@@ -58,7 +49,7 @@ model = network.FCN(2,  # inputs: x, y
                     64,  # number of neurons per hidden layer
                     4)  # number of hidden layers
 
-optimiser = torch.optim.Adam(model.parameters(), lr=1e-3)
+optimiser = torch.optim.Adam(model.parameters(), lr=1e-4)
 # optimiser = torch.optim.SGD(model.parameters(), lr=1e-2)
 
 
@@ -108,8 +99,10 @@ error_calculator = test_metrics.PoissonErrorCalculator(dataset.PINN_Dataset("./d
 
 # Training loop
 n_epochs = 100
-epoch_loss = torch.zeros((n_epochs,))
-epoch_error = list()
+# epoch_loss = torch.zeros((n_epochs,))
+loss_total_list = list()
+epoch_error_l2 = list()
+epoch_error_inf = list()
 
 for i in range(n_epochs):
     loss_list = list()
@@ -136,27 +129,33 @@ for i in range(n_epochs):
         if nbatch == 1000:
             break
 
-    epoch_loss[i] = torch.stack(loss_list).mean().item()
+    loss_total_list.append(torch.stack(loss_list).mean().item())
 
     # test_pred = model(batched_domain)
 
-    fig1 = plt.figure(figsize=(4, 8))
-    ax_loss = fig1.add_subplot(2, 1, 1)
-    ax_surf = fig1.add_subplot(2, 1, 2, projection="3d")
-    ax_loss.semilogy(epoch_loss)
-    # ax_surf.plot_surface(error_calculator.x, error_calculator.y, model(batched_domain).reshape_as(error_calculator.x).detach())
-    ax_surf = pred_plotter(ax_surf, model)
+    fig1 = plt.figure(figsize=(4, 4))
+    ax_loss = fig1.add_subplot(1, 1, 1)
+    ax_loss.semilogy(loss_total_list)
+
 
     # Calculate and plot error in prediction
-    fig2 = plt.figure(figsize=(4, 8))
-    ax_errornorm = fig2.add_subplot(2, 1, 1)
-    ax_errorcontours = fig2.add_subplot(2, 1, 2)
+    fig2 = plt.figure(figsize=(8, 8))
+    ax_error_l2norm = fig2.add_subplot(2, 2, 1)
+    ax_errorcontours = fig2.add_subplot(2, 2, 2)
+    ax_surf = fig2.add_subplot(2, 2, 3, projection="3d")
+    ax_error_infnorm = fig2.add_subplot(2, 2, 4)
+    
 
     error = error_calculator(model)
-    epoch_error.append(np.linalg.norm(error))
-    ax_errornorm.semilogy(epoch_error)
+    epoch_error_l2.append(np.linalg.norm(error.flatten()))
+    epoch_error_inf.append(np.linalg.norm(error.flatten(), ord=np.inf))
+    ax_error_l2norm.semilogy(epoch_error_l2)
     cs = ax_errorcontours.contourf(error_calculator.x, error_calculator.y,
                                    error.reshape(error_calculator.x.shape))
     fig2.colorbar(cs)
+    ax_surf = pred_plotter(ax_surf, model)
+    ax_error_infnorm.semilogy(epoch_error_inf)
+    
+    fig2.tight_layout()
 
     plt.show()
