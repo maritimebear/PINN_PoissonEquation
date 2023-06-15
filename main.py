@@ -23,7 +23,7 @@ import torch
 import matplotlib.pyplot as plt
 import numpy as np
 
-torch.manual_seed(767)
+torch.manual_seed(7673345)
 plt.ioff()
 PI = np.pi
 
@@ -39,7 +39,7 @@ extents_y = (0.0, 1.0)
 # Loss weights
 w_dataloss = 0.0
 w_residualloss = 1.0
-w_boundaryloss = 1.0
+w_boundaryloss = 100.0
 
 # Grid for plotting residuals and fields during testing
 test_gridspacing = 100
@@ -47,7 +47,7 @@ test_gridspacing = 100
 # Set up model
 model = network.FCN(2,  # inputs: x, y
                     1,  # outputs: u
-                    64,  # number of neurons per hidden layer
+                    32,  # number of neurons per hidden layer
                     4)  # number of hidden layers
 
 optimiser = torch.optim.Adam(model.parameters(), lr=1e-3)
@@ -72,8 +72,9 @@ trainer_data = trainers.DataTrainer(model, loss_fn=lossfn_data)
 # Residual trainer
 sampler_residual = sampler.UniformRandomSampler(n_points=n_residual_points, extents=[extents_x, extents_y])
 # Source term of Poisson equation
-poisson_source = lambda x: ((2 * PI**2) * torch.cos(PI * x[:, 0]) * torch.cos(PI * x[:, 1])).reshape(x.shape[0], -1)
-residual_fn = physics.PoissonEquation(poisson_source)
+# poisson_source = lambda x: ((2 * PI**2) * torch.cos(PI * x[:, 0]) * torch.cos(PI * x[:, 1])).reshape(x.shape[0], -1)
+# residual_fn = physics.PoissonEquation(poisson_source)
+residual_fn = physics.PoissonEquation()
 trainer_residual = trainers.ResidualTrainer(sampler_residual, model, residual_fn, lossfn_residual)
 
 # Boundary trainers
@@ -95,7 +96,7 @@ pred_plotter = test_metrics.PredictionPlotter(extents_x, test_gridspacing, exten
 error_calculator = test_metrics.PoissonErrorCalculator(dataset.PINN_Dataset("./data.csv", ["x", "y"], ["u"]))
 
 # Training loop
-n_epochs = 10000
+n_epochs = 20_000
 
 # Lists to store losses/errors
 loss_total_list = list()
@@ -182,10 +183,11 @@ for i in range(n_epochs):
     # TODO: Remove after fixing residual errors not reducing
     # Track residual learning
     # _domain = error_calculator._input
-    _res_test_fn = physics.PoissonEquation(poisson_source)
-    _x, _y = [torch.linspace(*ext, 100, requires_grad=True) for ext in (extents_x, extents_y)]
+    # _res_test_fn = physics.PoissonEquation(poisson_source)
+    _res_test_fn = physics.PoissonEquation()
+    _gridx, _gridy = torch.meshgrid(*[torch.linspace(*ext, 100, requires_grad=True) for ext in (extents_x, extents_y)], indexing='xy')
     
-    _res_domain = torch.hstack( [t[:, None] for t in (_x, _y)] )
+    _res_domain = torch.hstack( [t.flatten()[:, None] for t in (_gridx, _gridy)] )
     u_h = model(_res_domain)
     
     _residuals = _res_test_fn(u_h, _res_domain)
@@ -194,10 +196,17 @@ for i in range(n_epochs):
     
     fig_res = plt.figure(figsize=(4, 8))
     ax_resnorm = fig_res.add_subplot(2, 1, 1)
-    ax_rescontours = fig_res.add_subplot(2, 1, 2, projection="3d")
+    ax_rescontours = fig_res.add_subplot(2, 1, 2)
     ax_resnorm = plotters.semilogy_plot(ax_resnorm, _res_list, xlabel="Epochs", ylabel="||res||", title="L2 norm of residuals")
     
-    cs_r = ax_rescontours.contourf(_x.detach().numpy(), _y.detach().numpy(), _residuals.detach().numpy())
+    cs_r = ax_rescontours.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), _residuals.reshape(_gridx.shape).detach().numpy())
     fig_res.colorbar(cs_r)
-
+    
+    fig_pred = plt.figure(figsize=(8,4))
+    ax_pred = fig_pred.add_subplot(1, 2, 1)
+    cs_pred = ax_pred.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), u_h.reshape(_gridx.shape).detach().numpy())
+    fig_pred.colorbar(cs_pred)
+    ax_predsurf = fig_pred.add_subplot(1, 2, 2, projection="3d")
+    ax_predsurf = pred_plotter(ax_predsurf, model)
+    
     plt.show()
