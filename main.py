@@ -28,6 +28,7 @@ import numpy as np
 # If yes, is it possible to create an array of such objects with different
 # n_data_samples and train all of those in parallel?
 torch.manual_seed(7673345)
+torch.set_default_dtype(torch.float64)  # Double precision required for L-BFGS? https://stackoverflow.com/questions/73019486/torch-optim-lbfgs-does-not-change-parameters
 plt.ioff()
 PI = np.pi
 
@@ -112,7 +113,7 @@ def train_iteration(optimiser, step: bool) -> torch.Tensor:
     for batch in dataloader:
         optimiser.zero_grad()
         # Data loss
-        x, y = [tensor.float() for tensor in batch]  # Network weights have dtype torch.float32
+        x, y = [tensor for tensor in batch]  # Network weights have dtype torch.float32
         loss_data = trainer_data(x, y)
         # Residual loss
         loss_residual = trainer_residual()
