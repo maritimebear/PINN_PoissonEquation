@@ -21,7 +21,7 @@ class PoissonErrorCalculator():
         self._inputs, self._output = dataset[:]  # Assumes dataset is of type PINN_Dataset
         # Reshape to meshgrids for plotting
         self.x, self.y = [arr.reshape(n, n) for arr in (self._inputs[:, 0], self._inputs[:, 1])]
-        self._inputs = torch.from_numpy(self._inputs).float()  # self._inputs to be passed to model
+        self._inputs = torch.from_numpy(self._inputs)  # self._inputs to be passed to model
 
     def __call__(self, model) -> np.ndarray:
         # Returns absolute error in prediction

@@ -26,6 +26,7 @@ from scipy.stats import qmc
 
 
 torch.manual_seed(767)
+torch.set_default_dtype(torch.float64)  # Trying L-BFGS with double precision, https://stackoverflow.com/questions/73019486/torch-optim-lbfgs-does-not-change-parameters
 plt.ioff()
 PI = np.pi
 
@@ -40,7 +41,7 @@ extents_y = (0.0, 1.0)
 
 # Latin Hypercube sampling for residual - collocation points
 res_lhs_sampler = qmc.LatinHypercube(d=2)
-res_lhs_collpts = torch.from_numpy(res_lhs_sampler.random(n=n_residual_points)).float().requires_grad_(True) # Set of all collocation points
+res_lhs_collpts = torch.from_numpy(res_lhs_sampler.random(n=n_residual_points)).requires_grad_(True) # Set of all collocation points
 # qmc.scale(res_lhs_collpts, *[[ext[0]], [ext[1]] for ext in (extents_x, extents_y)])  # Scale if domain is not the unit square
 idxs_collpts = np.arange(res_lhs_collpts.shape[0])  # Array of indices to shuffle collocation points
 
@@ -131,7 +132,7 @@ def closure(optim, step):
         for batch in dataloader:
             optim.zero_grad()
             # Data loss
-            x, y = [tensor.float() for tensor in batch]  # Network weights have dtype torch.float32
+            x, y = [tensor for tensor in batch]  # Network weights have dtype torch.float32
             loss_data = trainer_data(x, y)
             # Residual loss
             # loss_residual = trainer_residual()
