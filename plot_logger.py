@@ -38,7 +38,7 @@ class Plot_and_Log_Scalar():
         # No way to update existing plots using matplotlib?
         # with plt.ioff():
             # self.figure = plt.figure(figsize=figsize)
-            # self.ax = self.figure.add_subplot(1, 1, 1)
+            # self.axes = self.figure.add_subplot(1, 1, 1)
 
     def _get_len(self) -> int:
         # Get length of lists in self.scalar_dict
@@ -62,7 +62,7 @@ class Plot_and_Log_Scalar():
         # Update plots
         with plt.ioff():
             self.figure = plt.figure(figsize=self.figsize)
-            self.ax = self.figure.add_subplot(1, 1, 1)
+            self.axes = self.figure.add_subplot(1, 1, 1)
             for _label, _list in self.scalars_dict.items():
-                self.ax = self.plot_function(self.ax, _list, label=_label,
-                                             ylabel=self.ylabel, xlabel=self.xlabel, title=self.title)
+                self.axes = self.plot_function(self.axes, _list, label=_label,
+                                               ylabel=self.ylabel, xlabel=self.xlabel, title=self.title)
