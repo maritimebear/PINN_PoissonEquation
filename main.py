@@ -129,7 +129,7 @@ def train_iteration(optimiser, step: bool) -> torch.Tensor:
                                    [loss_data_list, loss_residual_list, loss_boundaries_list, loss_total_list]):
             _list.append(_loss.detach())
 
-        return loss_total  # For future L-BFGS compatibility
+    return loss_total  # For future L-BFGS compatibility
 
 def postprocess():
     # Calculate error, test steps and plotting
