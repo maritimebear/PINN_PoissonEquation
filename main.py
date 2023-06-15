@@ -113,7 +113,11 @@ def train_iteration(optimiser, step: bool) -> torch.Tensor:
     for batch in dataloader:
         optimiser.zero_grad()
         # Data loss
+<<<<<<< HEAD
         x, y = [tensor.to(torch.get_default_dtype()) for tensor in batch]  # Network weights have dtype torch.float32
+=======
+        x, y = [tensor for tensor in batch]  # Network weights have dtype torch.float32
+>>>>>>> 3eaf49ad892eba31b18447ec8ba01900269d5cf8
         loss_data = trainer_data(x, y)
         # Residual loss
         loss_residual = trainer_residual()
