@@ -143,7 +143,7 @@ def train_iteration(optimiser, step: bool) -> torch.Tensor:
         for key, _loss in zip(["data", "residual", "boundaries", "total"],
                               [loss_data, loss_residual, loss_boundaries, loss_total]):
             losses_dict[key].append(_loss.detach())
-        logger_loss.update()
+        logger_loss.update_log()
         # for _loss, _list in zip([loss_data, loss_residual, loss_boundaries, loss_total],
                                    # [loss_data_list, loss_residual_list, loss_boundaries_list, loss_total_list]):
             # _list.append(_loss.detach())
@@ -156,7 +156,7 @@ def postprocess():
     error = error_calculator(model)
     errors_dict["l2"].append(np.linalg.norm(error.flatten()))
     errors_dict["max"].append(np.linalg.norm(error.flatten(), ord=np.inf))
-    logger_error.update()
+    logger_error.update_log()
     # epoch_error_l2.append(np.linalg.norm(error.flatten()))
     # epoch_error_inf.append(np.linalg.norm(error.flatten(), ord=np.inf))
 
@@ -196,7 +196,7 @@ def postprocess():
 
     residuals = res_test_fn(u_h, res_domain)
     residuals_dict["l2"].append(np.linalg.norm(residuals.detach().numpy()))
-    logger_residual.update()
+    logger_residual.update_log()
     # _res_list.append(np.linalg.norm(residuals.detach().numpy()))
 
     # Residuals contour plot
@@ -227,6 +227,7 @@ def postprocess():
     ax_predsurf.set_ylabel("y")
     ax_predsurf.set_zlabel("z")
 
+    _ = [logger.update_plot() for logger in (logger_loss, logger_error, logger_residual)]
     plt.show()
 
 

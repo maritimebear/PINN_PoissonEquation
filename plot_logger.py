@@ -50,8 +50,7 @@ class Plot_and_Log_Scalar():
                 assert len(_list) == n, "Lengths of lists to be logged are not equal"
         return n
 
-    def update(self) -> None:
-        # Update .csv
+    def update_log(self) -> None:
         with open(self.filename, "a") as file:  # Append to .csv created in __init__()
             for i in range(self.idx, self._get_len()):
                 # Write scalars line-by-line, incrementing self.idx after each line
@@ -59,7 +58,8 @@ class Plot_and_Log_Scalar():
                 file.write(",".join(f"{value}" for value in line) + "\n")
                 self.idx += 1
 
-        # Update plots
+    def update_plot(self) -> None:
+        # Creates a new figure upon each call
         with plt.ioff():
             self.figure = plt.figure(figsize=self.figsize)
             self.axes = self.figure.add_subplot(1, 1, 1)
