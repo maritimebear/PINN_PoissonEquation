@@ -4,3 +4,4 @@ outline.*
 .flake8
 Multigrid
 temp
+log_*
