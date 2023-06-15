@@ -106,8 +106,8 @@ pred_plotter = test_metrics.PredictionPlotter(extents_x, test_gridspacing, exten
 error_calculator = test_metrics.PoissonErrorCalculator(dataset.PINN_Dataset("./data.csv", ["x", "y"], ["u"]))
 
 # Training loop
-n_epochs_Adam = 20_000
-n_epochs_LBFGS = 0
+n_epochs_Adam = 0
+n_epochs_LBFGS = 10
 
 
 # Lists to store losses/errors
@@ -124,7 +124,7 @@ _res_list = list()
 
 # Optimisers
 optimiser_Adam = torch.optim.Adam(model.parameters(), lr=1e-3)
-optimiser_LBFGS = torch.optim.LBFGS(model.parameters())
+optimiser_LBFGS = torch.optim.LBFGS(model.parameters(), lr=1, max_iter=20)
 # optimiser = torch.optim.SGD(model.parameters(), lr=1e-2)
 
 def closure(optim, step):
