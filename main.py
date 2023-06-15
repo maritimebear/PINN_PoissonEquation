@@ -225,7 +225,7 @@ def postprocess():
     ax_predsurf = pred_plotter(ax_predsurf, model)
     ax_predsurf.set_xlabel("x")
     ax_predsurf.set_ylabel("y")
-    ax_predsurf.set_zlabel("z")
+    ax_predsurf.set_zlabel("u")
 
     _ = [logger.update_plot() for logger in (logger_loss, logger_error, logger_residual)]
     plt.show()
