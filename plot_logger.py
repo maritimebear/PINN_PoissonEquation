@@ -16,7 +16,7 @@ class Plot_and_Log_Scalar():
                  figsize=(8, 8)) -> None:
         # filename: name of .csv
         # scalars_dict: map of labels of each scalar to list containing that scalar
-        self.filename = filename + ".csv"
+        self.filename = "log_" + filename + ".csv"
         self.scalars_dict = scalars_dict
         assert self._get_len() == 0, "Check that all lists in scalars_dict are empty when initialising logger"
         # Plot labels and title
