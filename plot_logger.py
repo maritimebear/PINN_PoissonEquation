@@ -5,7 +5,7 @@ import plotters
 class Plot_and_Log_Scalar():
     # Log scalar results per epoch or iteration to .csv file and plot them
     # Overwrites existing .csv file, each instance of this class creates a matplotlib figure
-    # Intended for logging and plotting loss curves, so plots semilogy by default, change manually if needed
+    # Intended for logging and plotting loss curves, so plots semilogy by default - change manually if needed
     # Does not call plt.show()
     def __init__(self,
                  filename: str,
@@ -24,13 +24,13 @@ class Plot_and_Log_Scalar():
         self.ylabel = plot_ylabel
         self.title = plot_title
         self.figsize = figsize
-        # Plotting function
+        # Plotting function not passed as a constructor parameter, monkey-patch if needed
         self.plot_function = plotters.semilogy_plot
 
-        self.idx = 0  # Tracks last written index of data
+        self.idx = 0  # Tracks last-written index of data
 
         # Create .csv file
-        header = ",".join(f"{label}" for label in scalars_dict.keys())  # First line of .csv
+        header = ",".join(f"{label}" for label in scalars_dict.keys())  # First line of .csv, names of scalar series
         with open(self.filename, "w") as file:  # Overwrite existing file
             file.write(header + "\n")
 
