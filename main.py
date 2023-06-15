@@ -96,17 +96,6 @@ error_calculator = test_metrics.PoissonErrorCalculator(dataset.PINN_Dataset("./d
 # Training loop
 n_epochs = 10_000
 
-# Lists to store losses/errors
-# loss_total_list = list()
-# loss_data_list = list()
-# loss_residual_list = list()
-# loss_boundaries_list = list()
-# epoch_error_l2 = list()
-# epoch_error_inf = list()
-
-# TODO: Remove after fixing residuals
-# _res_list = list()
-
 # Setup plot-loggers for loss and error curves
 # Track losses and norms of error and residual through dicts
 # TODO: dict-key-lookup impact on performance?
@@ -144,9 +133,6 @@ def train_iteration(optimiser, step: bool) -> torch.Tensor:
                               [loss_data, loss_residual, loss_boundaries, loss_total]):
             losses_dict[key].append(_loss.detach())
         logger_loss.update_log()
-        # for _loss, _list in zip([loss_data, loss_residual, loss_boundaries, loss_total],
-                                   # [loss_data_list, loss_residual_list, loss_boundaries_list, loss_total_list]):
-            # _list.append(_loss.detach())
 
     return loss_total  # For future L-BFGS compatibility
 
@@ -157,14 +143,6 @@ def postprocess():
     errors_dict["l2"].append(np.linalg.norm(error.flatten()))
     errors_dict["max"].append(np.linalg.norm(error.flatten(), ord=np.inf))
     logger_error.update_log()
-    # epoch_error_l2.append(np.linalg.norm(error.flatten()))
-    # epoch_error_inf.append(np.linalg.norm(error.flatten(), ord=np.inf))
-
-    # Plotting
-    # fig_loss, ax_loss = plt.subplots(1, 1, figsize=(4, 4))
-    # for _list, label in zip([loss_data_list, loss_residual_list, loss_boundaries_list, loss_total_list],
-                            # ["Data", "Residual", "Boundaries", "Total"]):
-        # ax_loss = plotters.semilogy_plot(ax_loss, _list, label=label, xlabel="Iterations", ylabel="Loss", title="Losses")
 
     # Plot error contours
     fig_errorcf = plt.figure(figsize=(8, 8))
@@ -172,32 +150,19 @@ def postprocess():
     ax_errorcf.set_xlabel("x")
     ax_errorcf.set_ylabel("y")
     ax_errorcf.set_title("Absolute error in prediction")
-    # ax_surf = fig_errorcf.add_subplot(2, 2, 3, projection="3d")
-    # ax_error_infnorm = fig_errorcf.add_subplot(2, 2, 4)
-
-    # ax_error_l2norm, ax_error_infnorm = [plotters.semilogy_plot(ax, errorlist, xlabel="Iteration", ylabel="||error||", title=title) for
-                                         # ax, errorlist, title in zip([ax_error_l2norm, ax_error_infnorm],
-                                                                     # [epoch_error_l2, epoch_error_inf],
-                                                                     # ["L2 norm of error", "inf-norm of error"])]
-
     cf_error = ax_errorcf.contourf(error_calculator.x, error_calculator.y,
                                    error.reshape(error_calculator.x.shape))
     fig_errorcf.colorbar(cf_error)
-    # ax_surf = pred_plotter(ax_surf, model)
-    # fig_errorcf.tight_layout()
 
-    # TODO: Remove after fixing residual errors not reducing
     # Track residual learning
     res_test_fn = physics.PoissonEquation()
     _gridx, _gridy = torch.meshgrid(*[torch.linspace(*ext, 100, requires_grad=True) for ext in (extents_x, extents_y)], indexing='xy')
 
     res_domain = torch.hstack( [t.flatten()[:, None] for t in (_gridx, _gridy)] )
     u_h = model(res_domain)
-
     residuals = res_test_fn(u_h, res_domain)
     residuals_dict["l2"].append(np.linalg.norm(residuals.detach().numpy()))
     logger_residual.update_log()
-    # _res_list.append(np.linalg.norm(residuals.detach().numpy()))
 
     # Residuals contour plot
     fig_rescf = plt.figure(figsize=(8, 8))
@@ -205,8 +170,6 @@ def postprocess():
     ax_rescf.set_xlabel("x")
     ax_rescf.set_ylabel("y")
     ax_rescf.set_title("Residual field")
-    # ax_resnorm = plotters.semilogy_plot(ax_resnorm, _res_list, xlabel="Epochs", ylabel="||res||", title="L2 norm of residuals")
-
     cf_res = ax_rescf.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), residuals.reshape(_gridx.shape).detach().numpy())
     fig_rescf.colorbar(cf_res)
 
@@ -227,7 +190,9 @@ def postprocess():
     ax_predsurf.set_ylabel("y")
     ax_predsurf.set_zlabel("u")
 
+    # Update scalar plots
     _ = [logger.update_plot() for logger in (logger_loss, logger_error, logger_residual)]
+
     plt.show()
 
 
