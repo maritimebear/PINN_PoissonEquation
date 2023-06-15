@@ -62,9 +62,8 @@ lossfn_residual = loss.WeightedScalarLoss(torch.nn.MSELoss(), weight=w_residuall
 lossfn_boundary = loss.WeightedScalarLoss(torch.nn.MSELoss(), weight=w_boundaryloss)
 
 # Set up trainers
-
 # Data trainer
-sampling_idxs = np.random.randint(0, 1024**2, n_data_samples)
+sampling_idxs = np.random.randint(0, 1024**2, n_data_samples)  # 1024**2 == total number of ground truth samples from multigrid solution
 ds = dataset.Interior_Partial_Dataset("./data.csv", ["x", "y"], ["u"], sampling_idxs=sampling_idxs)
 dataloader = torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=True)
 trainer_data = trainers.DataTrainer(model, loss_fn=lossfn_data)
