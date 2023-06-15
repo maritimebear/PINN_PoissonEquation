@@ -17,7 +17,8 @@ import loss
 import sampler
 import physics
 import test_metrics
-import plotters
+# import plotters
+import plot_logger
 
 import torch
 import matplotlib.pyplot as plt
@@ -96,15 +97,29 @@ error_calculator = test_metrics.PoissonErrorCalculator(dataset.PINN_Dataset("./d
 n_epochs = 10_000
 
 # Lists to store losses/errors
-loss_total_list = list()
-loss_data_list = list()
-loss_residual_list = list()
-loss_boundaries_list = list()
-epoch_error_l2 = list()
-epoch_error_inf = list()
+# loss_total_list = list()
+# loss_data_list = list()
+# loss_residual_list = list()
+# loss_boundaries_list = list()
+# epoch_error_l2 = list()
+# epoch_error_inf = list()
 
 # TODO: Remove after fixing residuals
-_res_list = list()
+# _res_list = list()
+
+# Setup plot-loggers for loss and error curves
+# Track losses and norms of error and residual through dicts
+# TODO: dict-key-lookup impact on performance?
+losses_dict = {key: list() for key in ("data", "residual", "boundaries", "total")}
+errors_dict = {key: list() for key in ("l2", "max")}
+residuals_dict = {"l2": list()}
+logger_loss = plot_logger.Plot_and_Log_Scalar("losses", losses_dict,
+                                              plot_xlabel="Iteration", plot_ylabel="Loss", plot_title="Loss curves")
+logger_error = plot_logger.Plot_and_Log_Scalar("absolute_error", errors_dict,
+                                               plot_xlabel="Epoch", plot_ylabel="||error||", plot_title="Absolute error at test points")
+logger_residual = plot_logger.Plot_and_Log_Scalar("absolute_error", residuals_dict,
+                                                  plot_xlabel="Epoch", plot_ylabel="||residual||", plot_title="Residuals at test points")
+
 
 def train_iteration(optimiser, step: bool) -> torch.Tensor:
     # Can be used as closure function for L-BFGS
@@ -124,71 +139,96 @@ def train_iteration(optimiser, step: bool) -> torch.Tensor:
         loss_total.backward()
         if step:
             optimiser.step()
-        # Append losses to lists
-        for _loss, _list in zip([loss_data, loss_residual, loss_boundaries, loss_total],
-                                   [loss_data_list, loss_residual_list, loss_boundaries_list, loss_total_list]):
-            _list.append(_loss.detach())
+        # Append losses to corresponding lists in dict
+        for key, _loss in zip(["data", "residual", "boundaries", "total"],
+                              [loss_data, loss_residual, loss_boundaries, loss_total]):
+            losses_dict[key].append(_loss.detach())
+        logger_loss.update()
+        # for _loss, _list in zip([loss_data, loss_residual, loss_boundaries, loss_total],
+                                   # [loss_data_list, loss_residual_list, loss_boundaries_list, loss_total_list]):
+            # _list.append(_loss.detach())
 
     return loss_total  # For future L-BFGS compatibility
+
 
 def postprocess():
     # Calculate error, test steps and plotting
     error = error_calculator(model)
-    epoch_error_l2.append(np.linalg.norm(error.flatten()))
-    epoch_error_inf.append(np.linalg.norm(error.flatten(), ord=np.inf))
+    errors_dict["l2"].append(np.linalg.norm(error.flatten()))
+    errors_dict["max"].append(np.linalg.norm(error.flatten(), ord=np.inf))
+    logger_error.update()
+    # epoch_error_l2.append(np.linalg.norm(error.flatten()))
+    # epoch_error_inf.append(np.linalg.norm(error.flatten(), ord=np.inf))
 
     # Plotting
-    fig_loss, ax_loss = plt.subplots(1, 1, figsize=(4, 4))
-    for _list, label in zip([loss_data_list, loss_residual_list, loss_boundaries_list, loss_total_list],
-                            ["Data", "Residual", "Boundaries", "Total"]):
-        ax_loss = plotters.semilogy_plot(ax_loss, _list, label=label, xlabel="Iterations", ylabel="Loss", title="Losses")
+    # fig_loss, ax_loss = plt.subplots(1, 1, figsize=(4, 4))
+    # for _list, label in zip([loss_data_list, loss_residual_list, loss_boundaries_list, loss_total_list],
+                            # ["Data", "Residual", "Boundaries", "Total"]):
+        # ax_loss = plotters.semilogy_plot(ax_loss, _list, label=label, xlabel="Iterations", ylabel="Loss", title="Losses")
 
-    # Calculate and plot error in prediction
-    fig2 = plt.figure(figsize=(8, 8))
-    ax_error_l2norm = fig2.add_subplot(2, 2, 1)
-    ax_errorcontours = fig2.add_subplot(2, 2, 2)
-    ax_surf = fig2.add_subplot(2, 2, 3, projection="3d")
-    ax_error_infnorm = fig2.add_subplot(2, 2, 4)
+    # Plot error contours
+    fig_errorcf = plt.figure(figsize=(8, 8))
+    ax_errorcf = fig_errorcf.add_subplot(1, 1, 1)
+    ax_errorcf.set_xlabel("x")
+    ax_errorcf.set_ylabel("y")
+    ax_errorcf.set_title("Absolute error in prediction")
+    # ax_surf = fig_errorcf.add_subplot(2, 2, 3, projection="3d")
+    # ax_error_infnorm = fig_errorcf.add_subplot(2, 2, 4)
 
-    ax_error_l2norm, ax_error_infnorm = [plotters.semilogy_plot(ax, errorlist, xlabel="Iteration", ylabel="||error||", title=title) for
-                                         ax, errorlist, title in zip([ax_error_l2norm, ax_error_infnorm],
-                                                                     [epoch_error_l2, epoch_error_inf],
-                                                                     ["L2 norm of error", "inf-norm of error"])]
+    # ax_error_l2norm, ax_error_infnorm = [plotters.semilogy_plot(ax, errorlist, xlabel="Iteration", ylabel="||error||", title=title) for
+                                         # ax, errorlist, title in zip([ax_error_l2norm, ax_error_infnorm],
+                                                                     # [epoch_error_l2, epoch_error_inf],
+                                                                     # ["L2 norm of error", "inf-norm of error"])]
 
-    cs = ax_errorcontours.contourf(error_calculator.x, error_calculator.y,
+    cf_error = ax_errorcf.contourf(error_calculator.x, error_calculator.y,
                                    error.reshape(error_calculator.x.shape))
-    fig2.colorbar(cs)
-    ax_surf = pred_plotter(ax_surf, model)
-    fig2.tight_layout()
+    fig_errorcf.colorbar(cf_error)
+    # ax_surf = pred_plotter(ax_surf, model)
+    # fig_errorcf.tight_layout()
 
     # TODO: Remove after fixing residual errors not reducing
     # Track residual learning
-    _res_test_fn = physics.PoissonEquation()
+    res_test_fn = physics.PoissonEquation()
     _gridx, _gridy = torch.meshgrid(*[torch.linspace(*ext, 100, requires_grad=True) for ext in (extents_x, extents_y)], indexing='xy')
 
-    _res_domain = torch.hstack( [t.flatten()[:, None] for t in (_gridx, _gridy)] )
-    u_h = model(_res_domain)
+    res_domain = torch.hstack( [t.flatten()[:, None] for t in (_gridx, _gridy)] )
+    u_h = model(res_domain)
 
-    _residuals = _res_test_fn(u_h, _res_domain)
-    _res_list.append(np.linalg.norm(_residuals.detach().numpy()))
+    residuals = res_test_fn(u_h, res_domain)
+    residuals_dict["l2"].append(np.linalg.norm(residuals.detach().numpy()))
+    logger_residual.update()
+    # _res_list.append(np.linalg.norm(residuals.detach().numpy()))
 
+    # Residuals contour plot
+    fig_rescf = plt.figure(figsize=(8, 8))
+    ax_rescf = fig_rescf.add_subplot(1, 1, 1)
+    ax_rescf.set_xlabel("x")
+    ax_rescf.set_ylabel("y")
+    ax_rescf.set_title("Residual field")
+    # ax_resnorm = plotters.semilogy_plot(ax_resnorm, _res_list, xlabel="Epochs", ylabel="||res||", title="L2 norm of residuals")
 
-    fig_res = plt.figure(figsize=(4, 8))
-    ax_resnorm = fig_res.add_subplot(2, 1, 1)
-    ax_rescontours = fig_res.add_subplot(2, 1, 2)
-    ax_resnorm = plotters.semilogy_plot(ax_resnorm, _res_list, xlabel="Epochs", ylabel="||res||", title="L2 norm of residuals")
+    cf_res = ax_rescf.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), residuals.reshape(_gridx.shape).detach().numpy())
+    fig_rescf.colorbar(cf_res)
 
-    cs_r = ax_rescontours.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), _residuals.reshape(_gridx.shape).detach().numpy())
-    fig_res.colorbar(cs_r)
+    # Prediction contour plot
+    fig_predcf = plt.figure(figsize=(8, 8))
+    ax_predcf = fig_predcf.add_subplot(1, 1, 1)
+    ax_predcf.set_xlabel("x")
+    ax_predcf.set_ylabel("y")
+    ax_predcf.set_title("Predicted solution")
+    cf_pred = ax_predcf.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), u_h.reshape(_gridx.shape).detach().numpy())
+    fig_predcf.colorbar(cf_pred)
 
-    fig_pred = plt.figure(figsize=(8,4))
-    ax_pred = fig_pred.add_subplot(1, 2, 1)
-    cs_pred = ax_pred.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), u_h.reshape(_gridx.shape).detach().numpy())
-    fig_pred.colorbar(cs_pred)
-    ax_predsurf = fig_pred.add_subplot(1, 2, 2, projection="3d")
+    # Prediction surface plot
+    fig_predcf = plt.figure(figsize=(8, 8))
+    ax_predsurf = fig_predcf.add_subplot(1, 1, 1, projection="3d")
     ax_predsurf = pred_plotter(ax_predsurf, model)
+    ax_predsurf.set_xlabel("x")
+    ax_predsurf.set_ylabel("y")
+    ax_predsurf.set_zlabel("z")
 
     plt.show()
+
 
 for i in range(n_epochs):
     print(f"Epoch: {i}")
