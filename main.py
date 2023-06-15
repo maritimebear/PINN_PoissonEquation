@@ -39,7 +39,7 @@ extents_y = (0.0, 1.0)
 # Loss weights
 w_dataloss = 0.0
 w_residualloss = 1.0
-w_boundaryloss = 100.0
+w_boundaryloss = 10.0
 
 # Grid for plotting residuals and fields during testing
 test_gridspacing = 100
@@ -96,7 +96,7 @@ pred_plotter = test_metrics.PredictionPlotter(extents_x, test_gridspacing, exten
 error_calculator = test_metrics.PoissonErrorCalculator(dataset.PINN_Dataset("./data.csv", ["x", "y"], ["u"]))
 
 # Training loop
-n_epochs = 20_000
+n_epochs = 10_000
 
 # Lists to store losses/errors
 loss_total_list = list()
