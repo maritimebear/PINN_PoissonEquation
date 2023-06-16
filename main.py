@@ -48,7 +48,15 @@ extents_y = (0.0, 1.0)
 # Loss weights
 w_dataloss = 0.0
 w_residualloss = 1.0
-w_boundaryloss = 10.0
+w_boundaryloss = 1.0
+
+# Training loop control
+n_epochs = 10_000  # Use with for-loop
+converged = False  # Use with while-loop with convergence control
+convergence_threshold = 1e0
+convergence_sustain_duration = 10
+n_converged = 0
+
 
 # Grid for plotting residuals and fields during testing
 test_gridspacing = 100
@@ -97,9 +105,6 @@ trainers_boundaries = [trainers.BoundaryTrainer(sampler, model, boundary_fn, los
 # Test-metrics
 pred_plotter = test_metrics.PredictionPlotter(extents_x, test_gridspacing, extents_y, test_gridspacing)
 error_calculator = test_metrics.PoissonErrorCalculator(dataset.PINN_Dataset("./data.csv", ["x", "y"], ["u"]))
-
-# Training loop
-n_epochs = 10_000
 
 # Setup plot-loggers for loss and error curves
 # Track losses and norms of error and residual through dicts
@@ -171,53 +176,72 @@ def plot(u_h, error, residuals) -> None:
     # Update scalar plots
     _ = [logger.update_plot() for logger in (logger_loss, logger_error, logger_residual)]
 
-    # Plot error contours
-    fig_errorcf = plt.figure(figsize=(8, 8))
-    ax_errorcf = fig_errorcf.add_subplot(1, 1, 1)
-    ax_errorcf = plotters.contourf(ax_errorcf, error_calculator.x, error_calculator.y, error.reshape(error_calculator.x.shape),
-                                   xlabel="x", ylabel="y", fieldlabel="error", title="Absolute error in prediction")
-    # ax_errorcf.set_xlabel("x")
-    # ax_errorcf.set_ylabel("y")
-    # ax_errorcf.set_title("Absolute error in prediction")
-    # cf_error = ax_errorcf.contourf(error_calculator.x, error_calculator.y,
-    #                                error.reshape(error_calculator.x.shape))
-    # fig_errorcf.colorbar(cf_error)
-
-    # Residuals contour plot
-    fig_rescf = plt.figure(figsize=(8, 8))
-    ax_rescf = fig_rescf.add_subplot(1, 1, 1)
-    ax_rescf = plotters.contourf(ax_rescf, *[t.detach().numpy() for t in (_gridx, _gridy, residuals.reshape(_gridx.shape))],
-                                 xlabel="x", ylabel="y", fieldlabel="residual", title="Residual field")
-    # ax_rescf.set_xlabel("x")
-    # ax_rescf.set_ylabel("y")
-    # ax_rescf.set_title("Residual field")
-    # cf_res = ax_rescf.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), residuals.reshape(_gridx.shape).detach().numpy())
-    # fig_rescf.colorbar(cf_res)
-
-    # Prediction contour plot
-    fig_predcf = plt.figure(figsize=(8, 8))
-    ax_predcf = fig_predcf.add_subplot(1, 1, 1)
-    ax_predcf = plotters.contourf(ax_predcf, *[t.detach().numpy() for t in (_gridx, _gridy, u_h.reshape(_gridx.shape))],
-                                  xlabel="x", ylabel="y", fieldlabel="u\u0302", title="Predicted solution")
-    # ax_predcf.set_xlabel("x")
-    # ax_predcf.set_ylabel("y")
-    # ax_predcf.set_title("Predicted solution")
-    # cf_pred = ax_predcf.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), u_h.reshape(_gridx.shape).detach().numpy())
-    # fig_predcf.colorbar(cf_pred)
-
     # Prediction surface plot
     fig_predcf = plt.figure(figsize=(8, 8))
     ax_predsurf = fig_predcf.add_subplot(1, 1, 1, projection="3d")
     ax_predsurf = pred_plotter(ax_predsurf, model)
     ax_predsurf.set_xlabel("x")
     ax_predsurf.set_ylabel("y")
-    ax_predsurf.set_zlabel("u")
+    ax_predsurf.set_zlabel("u\u0302")  # \u0302: unicode for hat symbol
+    ax_predsurf.set_title("Predicted solution")
+
+    # Plot error contours
+    fig_errorcf = plt.figure(figsize=(8, 8))
+    ax_errorcf = fig_errorcf.add_subplot(1, 1, 1)
+    ax_errorcf = plotters.contourf(ax_errorcf,
+                                   error_calculator.x, error_calculator.y, error.reshape(error_calculator.x.shape),
+                                   xlabel="x", ylabel="y", fieldlabel="error", title="Absolute error in prediction")
+
+    # Residuals contour plot
+    fig_rescf = plt.figure(figsize=(8, 8))
+    ax_rescf = fig_rescf.add_subplot(1, 1, 1)
+    ax_rescf = plotters.contourf(ax_rescf,
+                                 *[t.detach().numpy() for t in (_gridx, _gridy, residuals.reshape(_gridx.shape))],
+                                 xlabel="x", ylabel="y", fieldlabel="residual", title="Residual field")
+
+    # Prediction contour plot
+    fig_predcf = plt.figure(figsize=(8, 8))
+    ax_predcf = fig_predcf.add_subplot(1, 1, 1)
+    ax_predcf = plotters.contourf(ax_predcf,
+                                  *[t.detach().numpy() for t in (_gridx, _gridy, u_h.reshape(_gridx.shape))],
+                                  xlabel="x", ylabel="y", fieldlabel="u\u0302", title="Predicted solution")
 
     plt.show()
 
 
-for i in range(n_epochs):
-    print(f"Epoch: {i}")
+# for-loop to train for a specified number of epochs
+# epochs wrt dataset size and batch size of ground truth data
+# for i in range(n_epochs):
+    # print(f"Epoch: {i}")
+    # _ = train_iteration(optimiser_Adam, step=True)  # Discard return value, losses appended to lists
+    # test_tensors, _ = test()  # Discard convergence control in for-loop
+    # plot(*test_tensors)
+
+# while-loop to train until converged wrt convergence control returned by test()
+epoch_ctr = 0
+while not converged:
     _ = train_iteration(optimiser_Adam, step=True)  # Discard return value, losses appended to lists
-    test_tensors, _ = test()
-    plot(*test_tensors)
+    test_tensors, convergence_control = test()
+
+    epoch_ctr += 1
+    # plot(*test_tensors)
+
+    if convergence_control <= convergence_threshold:  # threshold defined in main namespace
+        n_converged += 1
+        print(f"Epoch: {epoch_ctr}\t" +
+              f"Convergence control: {convergence_control}\t" +
+              f"Threshold: {convergence_threshold}\t" +
+              f"Remaining: {convergence_sustain_duration - n_converged}")
+    else:
+        n_converged = 0
+        print(f"Epoch: {epoch_ctr}\t" +
+              f"Convergence control: {convergence_control}\t" +
+              f"Threshold: {convergence_threshold}")
+
+    if n_converged >= convergence_sustain_duration:
+        converged = True
+        print(f"Training converged in {epoch_ctr} epochs")
+
+# Plot final results
+final_test, _ = test()
+plot(*final_test)
