@@ -40,7 +40,7 @@ PI = np.pi
 batch_size = 64
 n_data_samples = 1024
 n_residual_points = 10_000
-n_boundary_points = 1000
+n_boundary_points = 2500
 
 # Learning rate and decay control
 lr_Adam = 1e-3
@@ -53,12 +53,12 @@ extents_y = (0.0, 1.0)
 # Loss weights
 w_dataloss = 0.0
 w_residualloss = 1.0
-w_boundaryloss = 1.0
+w_boundaryloss = 0.5
 
 # Training loop control
 n_epochs = 10_000  # Use with for-loop
 converged = False  # Use with while-loop with convergence control
-convergence_threshold = 1e0
+convergence_threshold = 1e-1
 convergence_sustain_duration = 10
 n_converged = 0
 
@@ -234,7 +234,8 @@ while not converged:
     test_tensors, convergence_control = test()
 
     epoch_ctr += 1
-    # plot(*test_tensors)
+    if not epoch_ctr % 100:
+        plot(*test_tensors)
 
     if convergence_control <= convergence_threshold:  # threshold defined in main namespace
         n_converged += 1
