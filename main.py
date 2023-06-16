@@ -17,12 +17,15 @@ import loss
 import sampler
 import physics
 import test_metrics
-# import plotters
+import plotters
 import plot_logger
 
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
+
+from typing import Sequence, TypeAlias, Union
+Tensor: TypeAlias = Union[np.ndarray, torch.Tensor]
 
 # Is it possible to create a "main_trainer" class and set an RNG engine for
 # each instance of that class?
@@ -49,6 +52,8 @@ w_boundaryloss = 10.0
 
 # Grid for plotting residuals and fields during testing
 test_gridspacing = 100
+_gridx, _gridy = torch.meshgrid(*[torch.linspace(*ext, test_gridspacing, requires_grad=True) for ext in (extents_x, extents_y)], indexing='xy')
+res_domain = torch.hstack( [t.flatten()[:, None] for t in (_gridx, _gridy)] )
 
 # Set up model
 model = network.FCN(2,  # inputs: x, y
@@ -101,7 +106,8 @@ n_epochs = 10_000
 # TODO: dict-key-lookup impact on performance?
 losses_dict = {key: list() for key in ("data", "residual", "boundaries", "total")}
 errors_dict = {key: list() for key in ("l2", "max")}
-residuals_dict = {"l2": list()}
+residuals_dict = {key: list() for key in ("l2", "max")}
+
 logger_loss = plot_logger.Plot_and_Log_Scalar("losses", losses_dict,
                                               plot_xlabel="Iteration", plot_ylabel="Loss", plot_title="Loss curves")
 logger_error = plot_logger.Plot_and_Log_Scalar("absolute_error", errors_dict,
@@ -137,50 +143,67 @@ def train_iteration(optimiser, step: bool) -> torch.Tensor:
     return loss_total  # For future L-BFGS compatibility
 
 
-def postprocess():
-    # Calculate error, test steps and plotting
+def test() -> tuple[Sequence[Tensor], float]:
+    # Calculate error and residual fields over a fixed set of points in the domain
+    # Returns a tuple of resulting tensors and a metric of the error/residual (a norm or a mean),
+    # to determine solution convergence
+
+    # Calculate errors, update error logger
     error = error_calculator(model)
     errors_dict["l2"].append(np.linalg.norm(error.flatten()))
     errors_dict["max"].append(np.linalg.norm(error.flatten(), ord=np.inf))
     logger_error.update_log()
 
+    # Residuals
+    res_test_fn = physics.PoissonEquation()
+    u_h = model(res_domain)  # res_domain from main namespace
+    residuals = res_test_fn(u_h, res_domain)
+    residuals_dict["l2"].append(np.linalg.norm(residuals.detach().numpy()))
+    residuals_dict["max"].append(np.linalg.norm(residuals.detach().numpy(), ord=np.inf))
+    logger_residual.update_log()
+
+    convergence_control = residuals_dict["max"][-1]  # Using inf-norm of residuals for convergence control
+
+    return ([u_h, error, residuals], convergence_control)
+
+
+def plot(u_h, error, residuals) -> None:
+    # Update scalar plots
+    _ = [logger.update_plot() for logger in (logger_loss, logger_error, logger_residual)]
+
     # Plot error contours
     fig_errorcf = plt.figure(figsize=(8, 8))
     ax_errorcf = fig_errorcf.add_subplot(1, 1, 1)
-    ax_errorcf.set_xlabel("x")
-    ax_errorcf.set_ylabel("y")
-    ax_errorcf.set_title("Absolute error in prediction")
-    cf_error = ax_errorcf.contourf(error_calculator.x, error_calculator.y,
-                                   error.reshape(error_calculator.x.shape))
-    fig_errorcf.colorbar(cf_error)
-
-    # Track residual learning
-    res_test_fn = physics.PoissonEquation()
-    _gridx, _gridy = torch.meshgrid(*[torch.linspace(*ext, 100, requires_grad=True) for ext in (extents_x, extents_y)], indexing='xy')
-
-    res_domain = torch.hstack( [t.flatten()[:, None] for t in (_gridx, _gridy)] )
-    u_h = model(res_domain)
-    residuals = res_test_fn(u_h, res_domain)
-    residuals_dict["l2"].append(np.linalg.norm(residuals.detach().numpy()))
-    logger_residual.update_log()
+    ax_errorcf = plotters.contourf(ax_errorcf, error_calculator.x, error_calculator.y, error.reshape(error_calculator.x.shape),
+                                   xlabel="x", ylabel="y", fieldlabel="error", title="Absolute error in prediction")
+    # ax_errorcf.set_xlabel("x")
+    # ax_errorcf.set_ylabel("y")
+    # ax_errorcf.set_title("Absolute error in prediction")
+    # cf_error = ax_errorcf.contourf(error_calculator.x, error_calculator.y,
+    #                                error.reshape(error_calculator.x.shape))
+    # fig_errorcf.colorbar(cf_error)
 
     # Residuals contour plot
     fig_rescf = plt.figure(figsize=(8, 8))
     ax_rescf = fig_rescf.add_subplot(1, 1, 1)
-    ax_rescf.set_xlabel("x")
-    ax_rescf.set_ylabel("y")
-    ax_rescf.set_title("Residual field")
-    cf_res = ax_rescf.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), residuals.reshape(_gridx.shape).detach().numpy())
-    fig_rescf.colorbar(cf_res)
+    ax_rescf = plotters.contourf(ax_rescf, *[t.detach().numpy() for t in (_gridx, _gridy, residuals.reshape(_gridx.shape))],
+                                 xlabel="x", ylabel="y", fieldlabel="residual", title="Residual field")
+    # ax_rescf.set_xlabel("x")
+    # ax_rescf.set_ylabel("y")
+    # ax_rescf.set_title("Residual field")
+    # cf_res = ax_rescf.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), residuals.reshape(_gridx.shape).detach().numpy())
+    # fig_rescf.colorbar(cf_res)
 
     # Prediction contour plot
     fig_predcf = plt.figure(figsize=(8, 8))
     ax_predcf = fig_predcf.add_subplot(1, 1, 1)
-    ax_predcf.set_xlabel("x")
-    ax_predcf.set_ylabel("y")
-    ax_predcf.set_title("Predicted solution")
-    cf_pred = ax_predcf.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), u_h.reshape(_gridx.shape).detach().numpy())
-    fig_predcf.colorbar(cf_pred)
+    ax_predcf = plotters.contourf(ax_predcf, *[t.detach().numpy() for t in (_gridx, _gridy, u_h.reshape(_gridx.shape))],
+                                  xlabel="x", ylabel="y", fieldlabel="u\u0302", title="Predicted solution")
+    # ax_predcf.set_xlabel("x")
+    # ax_predcf.set_ylabel("y")
+    # ax_predcf.set_title("Predicted solution")
+    # cf_pred = ax_predcf.contourf(_gridx.detach().numpy(), _gridy.detach().numpy(), u_h.reshape(_gridx.shape).detach().numpy())
+    # fig_predcf.colorbar(cf_pred)
 
     # Prediction surface plot
     fig_predcf = plt.figure(figsize=(8, 8))
@@ -190,13 +213,11 @@ def postprocess():
     ax_predsurf.set_ylabel("y")
     ax_predsurf.set_zlabel("u")
 
-    # Update scalar plots
-    _ = [logger.update_plot() for logger in (logger_loss, logger_error, logger_residual)]
-
     plt.show()
 
 
 for i in range(n_epochs):
     print(f"Epoch: {i}")
     _ = train_iteration(optimiser_Adam, step=True)  # Discard return value, losses appended to lists
-    postprocess()
+    test_tensors, _ = test()
+    plot(*test_tensors)
