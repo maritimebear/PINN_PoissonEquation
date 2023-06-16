@@ -42,6 +42,11 @@ n_data_samples = 1024
 n_residual_points = 10_000
 n_boundary_points = 1000
 
+# Learning rate and decay control
+lr_Adam = 1e-3
+lr_decay_exp = 1 - 1e-4  # Exponent for exponential learning rate decay
+
+# Domain definition
 extents_x = (0.0, 1.0)
 extents_y = (0.0, 1.0)
 
@@ -69,7 +74,9 @@ model = network.FCN(2,  # inputs: x, y
                     32,  # number of neurons per hidden layer
                     4)  # number of hidden layers
 
+# Set up optimiser
 optimiser_Adam = torch.optim.Adam(model.parameters(), lr=1e-3)
+lr_scheduler_Adam = torch.optim.lr_scheduler.ExponentialLR(optimiser_Adam, gamma=lr_decay_exp)
 
 # Set up losses
 lossfn_data = loss.WeightedScalarLoss(torch.nn.MSELoss(), weight=w_dataloss)
@@ -121,7 +128,7 @@ logger_residual = plot_logger.Plot_and_Log_Scalar("residuals", residuals_dict,
                                                   plot_xlabel="Epoch", plot_ylabel="||residual||", plot_title="Residuals at test points")
 
 
-def train_iteration(optimiser, step: bool) -> torch.Tensor:
+def train_iteration(optimiser, step: bool, lr_scheduler=None) -> torch.Tensor:
     # Can be used as closure function for L-BFGS
     # Returns total loss (scalar)
     # step: whether or not to optimiser.step()
@@ -139,6 +146,9 @@ def train_iteration(optimiser, step: bool) -> torch.Tensor:
         loss_total.backward()
         if step:
             optimiser.step()
+        if lr_scheduler is not None:
+            lr_scheduler.step()
+
         # Append losses to corresponding lists in dict
         for key, _loss in zip(["data", "residual", "boundaries", "total"],
                               [loss_data, loss_residual, loss_boundaries, loss_total]):
@@ -213,14 +223,14 @@ def plot(u_h, error, residuals) -> None:
 # epochs wrt dataset size and batch size of ground truth data
 # for i in range(n_epochs):
     # print(f"Epoch: {i}")
-    # _ = train_iteration(optimiser_Adam, step=True)  # Discard return value, losses appended to lists
+    # _ = train_iteration(optimiser_Adam, step=True, lr_scheduler=lr_scheduler_Adam)  # Discard return value, losses appended to lists
     # test_tensors, _ = test()  # Discard convergence control in for-loop
     # plot(*test_tensors)
 
 # while-loop to train until converged wrt convergence control returned by test()
 epoch_ctr = 0
 while not converged:
-    _ = train_iteration(optimiser_Adam, step=True)  # Discard return value, losses appended to lists
+    _ = train_iteration(optimiser_Adam, step=True, lr_scheduler=lr_scheduler_Adam)  # Discard return value, losses appended to lists
     test_tensors, convergence_control = test()
 
     epoch_ctr += 1
