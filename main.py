@@ -123,7 +123,7 @@ residuals_dict = {key: list() for key in ("l2", "max")}
 logger_loss = plot_logger.Plot_and_Log_Scalar("losses", losses_dict,
                                               plot_xlabel="Iteration", plot_ylabel="Loss", plot_title="Loss curves")
 logger_error = plot_logger.Plot_and_Log_Scalar("absolute_error", errors_dict,
-                                               plot_xlabel="Epoch", plot_ylabel="||error||", plot_title="Absolute error at test points")
+                                               plot_xlabel="Epoch", plot_ylabel="||error||", plot_title="Error at test points")
 logger_residual = plot_logger.Plot_and_Log_Scalar("residuals", residuals_dict,
                                                   plot_xlabel="Epoch", plot_ylabel="||residual||", plot_title="Residuals at test points")
 
@@ -200,7 +200,7 @@ def plot(u_h, error, residuals) -> None:
     ax_errorcf = fig_errorcf.add_subplot(1, 1, 1)
     ax_errorcf = plotters.contourf(ax_errorcf,
                                    error_calculator.x, error_calculator.y, error.reshape(error_calculator.x.shape),
-                                   xlabel="x", ylabel="y", fieldlabel="error", title="Absolute error in prediction")
+                                   xlabel="x", ylabel="y", fieldlabel="error", title="Error in prediction")
 
     # Residuals contour plot
     fig_rescf = plt.figure(figsize=(8, 8))
