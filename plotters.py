@@ -21,3 +21,19 @@ def semilogy_plot(ax: Axes,
     [f(arg) for f, arg in zip([ax.set_xlabel, ax.set_ylabel, ax.set_title],
                               [xlabel, ylabel, title]) if arg is not None]
     return ax
+
+
+def contourf(ax: Axes,
+             x,
+             y,
+             field,
+             xlabel=None,
+             ylabel=None,
+             fieldlabel=None,
+             title=None) -> Axes:
+    # Convenience function to reduce boilerplate code when plotting filled contours
+    cf = ax.contourf(x, y, field)
+    cbar = ax.get_figure().colorbar(cf, ax=ax)
+    _ = [f(arg) for f, arg in zip([ax.set_xlabel, ax.set_ylabel, ax.set_title, cbar.set_label],
+                                  [xlabel, ylabel, title, fieldlabel]) if arg is not None]
+    return ax
